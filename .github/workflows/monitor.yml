@@ -1,0 +1,38 @@
+name: Steam库存监控
+
+on:
+  schedule:
+    # 每分钟运行一次 (GitHub Actions最小间隔5分钟)
+    - cron: '*/5 * * * *'  # 每5分钟
+  workflow_dispatch:  # 允许手动触发
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: 检出代码
+      uses: actions/checkout@v3
+      
+    - name: 设置Python环境
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: 安装依赖
+      run: |
+        pip install requests schedule
+        
+    - name: 运行监控程序
+      env:
+        STEAM_ID: ${{ secrets.STEAM_ID }}
+        PUSH_TOKEN: ${{ secrets.PUSH_TOKEN }}
+      run: |
+        python steam_inventory_monitor_github.py
+        
+    - name: 保存库存数据
+      uses: actions/upload-artifact@v3
+      with:
+        name: inventory-data
+        path: inventory_data.json
+        retention-days: 7
