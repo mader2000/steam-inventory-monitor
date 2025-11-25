@@ -1,6 +1,8 @@
 name: Steam库存监控
 
 on:
+  push:
+    branches: [ master, main ]  # 推送代码时触发
   schedule:
     # 每分钟运行一次 (GitHub Actions最小间隔5分钟)
     - cron: '*/5 * * * *'  # 每5分钟
