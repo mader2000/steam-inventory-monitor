@@ -39,7 +39,8 @@ class SteamInventoryMonitor:
         url = f"https://steamcommunity.com/inventory/{self.steam_id}/{app_id}/{context_id}"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+            'Accept-Language': 'zh-CN,zh;q=0.9'  # 请求中文
         }
         
         try:
