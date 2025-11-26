@@ -16,6 +16,12 @@ jobs:
     - name: 检出代码
       uses: actions/checkout@v4
       
+    - name: 下载上次库存数据
+      uses: actions/download-artifact@v4
+      with:
+        name: inventory-data
+      continue-on-error: true  # 首次运行时没有artifact,允许失败
+      
     - name: 设置Python环境
       uses: actions/setup-python@v4
       with:
@@ -38,3 +44,4 @@ jobs:
         name: inventory-data
         path: inventory_data.json
         retention-days: 7
+        overwrite: true  # 覆盖上次的数据
