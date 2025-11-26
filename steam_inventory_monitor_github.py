@@ -160,6 +160,27 @@ class SteamInventoryMonitor:
         
         if not self.previous_inventory:
             print("🆕 首次运行,保存初始库存")
+            print("\n📋 当前所有库存物品:")
+            print("="*60)
+            
+            # 输出所有库存物品
+            for idx, (item_id, item_data) in enumerate(current_inventory.items(), 1):
+                name = self.get_item_name(item_data['classid'], item_data['instanceid'])
+                print(f"{idx}. {name} x{item_data['amount']}")
+            
+            print("="*60)
+            print(f"✅ 共 {len(current_inventory)} 件物品")
+            
+            # 如果配置了推送,也发送到手机
+            if self.push_token:
+                message = f"<h3>📋 初始库存清单 ({len(current_inventory)}件)</h3>"
+                message += f"<p>⏰ 时间: {timestamp}</p><ul>"
+                for item_id, item_data in current_inventory.items():
+                    name = self.get_item_name(item_data['classid'], item_data['instanceid'])
+                    message += f"<li>{name} x{item_data['amount']}</li>"
+                message += "</ul>"
+                self.send_pushplus(message)
+            
             self.save_inventory(current_inventory)
             return
         
