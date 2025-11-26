@@ -12,9 +12,10 @@ from datetime import datetime
 from pathlib import Path
 
 class SteamInventoryMonitor:
-    def __init__(self, steam_id, push_token=None):
+    def __init__(self, steam_id, push_token=None, api_key=None):
         self.steam_id = steam_id
         self.push_token = push_token
+        self.api_key = api_key
         self.data_file = Path("inventory_data.json")
         self.previous_inventory = self.load_previous_inventory()
         self.descriptions = {}
@@ -36,11 +37,12 @@ class SteamInventoryMonitor:
     
     def get_inventory_by_api(self, app_id=730, context_id=2):
         """通过Steam API获取库存"""
-        url = f"https://steamcommunity.com/inventory/{self.steam_id}/{app_id}/{context_id}"
+        # 添加语言参数请求中文
+        url = f"https://steamcommunity.com/inventory/{self.steam_id}/{app_id}/{context_id}?l=schinese"
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept-Language': 'zh-CN,zh;q=0.9'  # 请求中文
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'  # 请求中文
         }
         
         try:
@@ -62,6 +64,8 @@ class SteamInventoryMonitor:
                             f"{desc['classid']}_{desc['instanceid']}": desc
                             for desc in data['descriptions']
                         }
+                        # 尝试使用Steam Web API获取中文名称
+                        self.enrich_descriptions_with_chinese(app_id=app_id, language='schinese')
                     
                     return inventory
             else:
@@ -70,6 +74,46 @@ class SteamInventoryMonitor:
         except Exception as e:
             print(f"❌ 请求异常: {e}")
             return None
+    
+    def enrich_descriptions_with_chinese(self, app_id=730, language='schinese'):
+        """使用Steam Web API尝试拉取中文名称并合并到descriptions"""
+        if not self.descriptions or not self.api_key:
+            return
+        try:
+            # 收集所有classid
+            classids = sorted({str(desc.get('classid')) for desc in self.descriptions.values() if desc.get('classid')})
+            if not classids:
+                return
+            # 组装请求参数(批量)
+            params = {
+                'key': self.api_key,
+                'appid': app_id,
+                'class_count': len(classids),
+                'language': language
+            }
+            for idx, cid in enumerate(classids):
+                params[f'classid{idx}'] = cid
+            url = 'https://api.steampowered.com/ISteamEconomy/GetAssetClassInfo/v1/'
+            resp = requests.post(url, data=params, timeout=30)
+            if resp.status_code != 200:
+                print(f"⚠️ 中文名称获取失败: HTTP {resp.status_code}")
+                return
+            result = resp.json().get('result', {})
+            # 合并中文名称
+            for cid in classids:
+                info = result.get(str(cid)) or result.get(cid)
+                if not info:
+                    continue
+                for key, desc in self.descriptions.items():
+                    if str(desc.get('classid')) == str(cid):
+                        # 优先使用info['name']作为本地化名称
+                        if info.get('name'):
+                            desc['name'] = info['name']
+                        # 兼容market_hash_name
+                        if info.get('market_hash_name'):
+                            desc['market_hash_name'] = info['market_hash_name']
+        except Exception as e:
+            print(f"⚠️ 中文名称增强异常: {e}")
     
     def compare_inventory(self, current, previous):
         """比较库存变化"""
@@ -93,7 +137,13 @@ class SteamInventoryMonitor:
         """根据classid和instanceid获取物品名称"""
         key = f"{classid}_{instanceid}"
         if key in self.descriptions:
-            return self.descriptions[key].get('market_hash_name', '未知物品')
+            desc = self.descriptions[key]
+            # 优先使用中文字段 'name'，其次使用 'market_hash_name'
+            name = desc.get('name') or desc.get('market_hash_name') or '未知物品'
+            type_hint = desc.get('type', '')
+            if type_hint:
+                name = f"{name} ({type_hint})"
+            return name
         return f"物品ID: {classid}"
     
     def send_pushplus(self, message):
@@ -213,6 +263,7 @@ def main():
     # 从环境变量读取配置
     steam_id = os.environ.get('STEAM_ID')
     push_token = os.environ.get('PUSH_TOKEN')
+    api_key = os.environ.get('STEAM_API_KEY')
     
     if not steam_id:
         print("❌ 错误: 未设置 STEAM_ID 环境变量")
@@ -223,10 +274,12 @@ def main():
     print("🚀 Steam库存监控程序 - GitHub Actions版本")
     print(f"📋 监控Steam ID: {steam_id}")
     print(f"📱 推送状态: {'已配置' if push_token else '未配置'}")
+    print(f"🔑 Steam API Key: {'已配置' if api_key else '未配置'}")
     
     monitor = SteamInventoryMonitor(
         steam_id=steam_id,
-        push_token=push_token
+        push_token=push_token,
+        api_key=api_key
     )
     
     try:
